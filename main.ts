@@ -9,8 +9,6 @@ import {
   normalizePath,
   requestUrl,
 } from 'obsidian';
-import pMap from 'p-map';
-import path from 'path-browserify';
 
 // --- Types ---
 
@@ -346,6 +344,8 @@ class TitleGeneratorSettingTab extends PluginSettingTab {
 export default class TitleGeneratorPlugin extends Plugin {
   settings: TitleGeneratorSettings;
 
+  private statusBarEl: HTMLElement | null = null;
+
   private async generateTitle(file: TFile, content: string) {
     const providerConfig = PROVIDERS[this.settings.provider];
     const apiKey = this.settings[providerConfig.apiKeyField] as string;
@@ -366,8 +366,10 @@ export default class TitleGeneratorPlugin extends Plugin {
       return;
     }
 
-    const loadingStatus = this.addStatusBarItem();
-    loadingStatus.createEl('span', { text: 'Generating title...' });
+    if (!this.statusBarEl) {
+      this.statusBarEl = this.addStatusBarItem();
+    }
+    this.statusBarEl.setText('Generating title...');
 
     try {
       let title = await callProvider(providerConfig, apiKey, model, content);
@@ -384,10 +386,9 @@ export default class TitleGeneratorPlugin extends Plugin {
       if (title.length > 200) title = title.substring(0, 200).trim();
       if (!title) title = 'Untitled';
 
-      const currentPath = path.parse(file.path);
-      let newPath = normalizePath(
-        `${currentPath.dir}/${title}${currentPath.ext}`
-      );
+      const dir = file.parent?.path ?? '';
+      const ext = file.extension ? `.${file.extension}` : '';
+      let newPath = normalizePath(`${dir}/${title}${ext}`);
 
       // If a file with that name already exists, append a number
       let counter = 1;
@@ -398,9 +399,7 @@ export default class TitleGeneratorPlugin extends Plugin {
         if (counter > 100) {
           throw new Error(`Could not find a unique filename for "${title}"`);
         }
-        newPath = normalizePath(
-          `${currentPath.dir}/${title} ${counter}${currentPath.ext}`
-        );
+        newPath = normalizePath(`${dir}/${title} ${counter}${ext}`);
         counter += 1;
       }
 
@@ -411,7 +410,9 @@ export default class TitleGeneratorPlugin extends Plugin {
       console.error('Title generation failed:', err);
       new Notice(`Unable to generate title: ${message}`);
     } finally {
-      loadingStatus.remove();
+      if (this.statusBarEl) {
+        this.statusBarEl.setText('');
+      }
     }
   }
 
@@ -467,9 +468,10 @@ export default class TitleGeneratorPlugin extends Plugin {
             .setTitle('Generate titles')
             .setIcon('lucide-edit-3')
             .onClick(() =>
-              pMap<TFile, void>(tFiles, (f) => this.generateTitleFromFile(f), {
-                concurrency: 1,
-              })
+              tFiles.reduce(
+                (chain, f) => chain.then(() => this.generateTitleFromFile(f)),
+                Promise.resolve()
+              )
             );
         });
       })
