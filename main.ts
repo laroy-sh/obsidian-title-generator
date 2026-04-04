@@ -169,14 +169,15 @@ async function openaiCompatGenerate(
 }
 
 async function googleGenerate(
+  baseUrl: string,
   apiKey: string,
   model: string,
   content: string
 ): Promise<string> {
   const response = await requestUrl({
-    url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    url: `${baseUrl}/models/${model}:generateContent`,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
       contents: [{ parts: [{ text: content }] }],
@@ -186,12 +187,13 @@ async function googleGenerate(
 }
 
 async function anthropicGenerate(
+  baseUrl: string,
   apiKey: string,
   model: string,
   content: string
 ): Promise<string> {
   const response = await requestUrl({
-    url: 'https://api.anthropic.com/v1/messages',
+    url: `${baseUrl}/messages`,
     method: 'POST',
     headers: {
       'x-api-key': apiKey,
@@ -223,9 +225,9 @@ async function callProvider(
     case 'openai-compat':
       return openaiCompatGenerate(provider.baseUrl, apiKey, model, truncated);
     case 'google':
-      return googleGenerate(apiKey, model, truncated);
+      return googleGenerate(provider.baseUrl, apiKey, model, truncated);
     case 'anthropic':
-      return anthropicGenerate(apiKey, model, truncated);
+      return anthropicGenerate(provider.baseUrl, apiKey, model, truncated);
     default:
       throw new Error(`Unsupported API type: ${provider.apiType}`);
   }
@@ -359,6 +361,14 @@ export default class TitleGeneratorPlugin extends Plugin {
       if (this.settings.lowerCaseTitles) {
         title = title.toLowerCase();
       }
+
+      // Sanitize title for safe use as a filename
+      title = title
+        .replace(/[/\\?*:|"<>]/g, '')
+        .replace(/^\.+|\.+$/g, '')
+        .trim();
+      if (title.length > 200) title = title.substring(0, 200).trim();
+      if (!title) title = 'Untitled';
 
       const currentPath = path.parse(file.path);
       let newPath = normalizePath(
