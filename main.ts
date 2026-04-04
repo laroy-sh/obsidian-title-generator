@@ -165,7 +165,11 @@ async function openaiCompatGenerate(
       ],
     }),
   });
-  return response.json.choices[0].message.content.trim();
+  const text = response.json?.choices?.[0]?.message?.content;
+  if (typeof text !== 'string') {
+    throw new Error('Unexpected response from provider');
+  }
+  return text.trim();
 }
 
 async function googleGenerate(
@@ -175,7 +179,7 @@ async function googleGenerate(
   content: string
 ): Promise<string> {
   const response = await requestUrl({
-    url: `${baseUrl}/models/${model}:generateContent`,
+    url: `${baseUrl}/models/${encodeURIComponent(model)}:generateContent`,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify({
@@ -183,7 +187,13 @@ async function googleGenerate(
       contents: [{ parts: [{ text: content }] }],
     }),
   });
-  return response.json.candidates[0].content.parts[0].text.trim();
+  const text = response.json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (typeof text !== 'string') {
+    throw new Error(
+      'Unexpected response from Google (possibly blocked by safety filter)'
+    );
+  }
+  return text.trim();
 }
 
 async function anthropicGenerate(
@@ -207,7 +217,11 @@ async function anthropicGenerate(
       messages: [{ role: 'user', content }],
     }),
   });
-  return response.json.content[0].text.trim();
+  const text = response.json?.content?.[0]?.text;
+  if (typeof text !== 'string') {
+    throw new Error('Unexpected response from Anthropic');
+  }
+  return text.trim();
 }
 
 async function callProvider(
@@ -381,6 +395,9 @@ export default class TitleGeneratorPlugin extends Plugin {
         this.app.vault.getAbstractFileByPath(newPath) &&
         newPath !== file.path
       ) {
+        if (counter > 100) {
+          throw new Error(`Could not find a unique filename for "${title}"`);
+        }
         newPath = normalizePath(
           `${currentPath.dir}/${title} ${counter}${currentPath.ext}`
         );
@@ -389,7 +406,10 @@ export default class TitleGeneratorPlugin extends Plugin {
 
       await this.app.fileManager.renameFile(file, newPath);
     } catch (err) {
-      new Notice(`Unable to generate title:\n\n${err}`);
+      const message =
+        err instanceof Error ? err.message : 'An unknown error occurred';
+      console.error('Title generation failed:', err);
+      new Notice(`Unable to generate title: ${message}`);
     } finally {
       loadingStatus.remove();
     }
@@ -403,11 +423,12 @@ export default class TitleGeneratorPlugin extends Plugin {
   private async generateTitleFromEditor(editor: Editor) {
     const activeFile = this.app.workspace.getActiveFile();
     if (!activeFile) {
-      throw new Error('No active file');
+      new Notice('No active file to generate a title for.');
+      return;
     }
 
     const content = editor.getValue();
-    this.generateTitle(activeFile, content);
+    await this.generateTitle(activeFile, content);
   }
 
   async onload() {
@@ -459,6 +480,9 @@ export default class TitleGeneratorPlugin extends Plugin {
 
   async loadSettings() {
     this.settings = { ...DEFAULT_SETTINGS, ...(await this.loadData()) };
+    if (!PROVIDERS[this.settings.provider]) {
+      this.settings.provider = DEFAULT_SETTINGS.provider;
+    }
   }
 
   async saveSettings() {
