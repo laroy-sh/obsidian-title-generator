@@ -9,8 +9,8 @@ dependencies:
     specifier: ^4.11.1
     version: 4.11.1
   p-map:
-    specifier: ^6.0.0
-    version: 6.0.0
+    specifier: ^7.0.5
+    version: 7.0.5
   path-browserify:
     specifier: ^1.0.1
     version: 1.0.1
@@ -2415,9 +2415,9 @@ packages:
       p-limit: 3.1.0
     dev: true
 
-  /p-map@6.0.0:
-    resolution: {integrity: sha512-T8BatKGY+k5rU+Q/GTYgrEf2r4xRMevAN5mtXc2aPc4rS1j3s+vWTaO2Wag94neXuCAUAs8cxBL9EeB5EA6diw==}
-    engines: {node: '>=16'}
+  /p-map@7.0.5:
+    resolution: {integrity: sha512-e8vJF4XdVkzqqSHguEMz41mQO1wKwxKm5ENrUJQUu9kLDCtn83cxbyHZcszr4QC5zEA7WffRRC4gsTecC7J9oA==}
+    engines: {node: '>=18'}
     dev: false
 
   /parent-module@1.0.1:
